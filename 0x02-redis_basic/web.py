@@ -1,35 +1,30 @@
 #!/usr/bin/env python3
-"""tasks"""
-
+""" get_page module get page of url"""
 from typing import Callable
 from functools import wraps
-import redis
 import requests
+import redis
 
-redis_client = redis.Redis()
-
-
-def url_count(method: Callable) -> Callable:
-	"""counts how many times an url is accessed"""
-
-	@wraps(method)
-	def wrapper(*args, **kwargs):
-		url = args[0]
-		redis_client.incr(f"count:{url}")
-		cached = redis_client.get(f"{url}")
-		if cached:
-			return cached.decode("utf-8")
-		redis_client.setex(f"{url}, 10, {method(url)}")
-		return method(*args, **kwargs)
-
-	return wrapper
+redis = redis.Redis()
 
 
+def count(method: Callable) -> Callable:
+    """ count the number of times a method is called """
+    @wraps(method)
+    def wrapper(url):
+        """ wrapper  of count """
+        redis.incr(f"count:{url}")
+        cached = redis.get(f"cached:{url}")
+        if cached:
+            return cached.decode('utf-8')
+        res = method(url)
+        redis.set(f"count:{url}", 0)
+        redis.setex(f"cached:{url}", 10, res)
+        return res
+    return wrapper
+
+
+@count
 def get_page(url: str) -> str:
-	"""Makes a http request to a given endpoint"""
-	response = requests.get(url)
-	return response.text
-
-
-if __name__ == "__main__":
-	get_page("http://slowwly.robertomurray.co.uk")
+    """ get page of url"""
+    return requests.get(url).text
